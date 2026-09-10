@@ -1,0 +1,6 @@
+dash>=2.17,<4
+dash-bootstrap-components>=1.6,<3
+pandas>=2.0,<3
+plotly>=5.22,<7
+git+https://github.com/PoonLab/OpenRDP.git
+
