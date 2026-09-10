@@ -1,35 +1,45 @@
-# RDP-tkp
+# RDP-tkp — VEME 2026 practical
 
-A compact workflow companion for **[nextRDP Web](https://murrellgroup.github.io/nextRDPweb/)**, the browser-based RDP implementation recommended by Darren Martin.
+Hands-on materials for the VEME recombination-detection lesson led by Darren Martin, with Taylor Paisie assisting.
 
-## Launch WebRDP
+## Start here
 
-**[Open nextRDP Web →](https://murrellgroup.github.io/nextRDPweb/)**
+1. Open the [student lesson](LESSON.md).
+2. Download the [synthetic teaching alignment](data/veme_synthetic_recombination.fasta).
+3. Launch **[nextRDP Web](https://murrellgroup.github.io/nextRDPweb/)**.
+4. Record observations in the [student worksheet](WORKSHEET.md).
 
-No Python, Miniconda, Dash server, or local OpenRDP installation is required. Analysis runs in the browser through a WebAssembly-compatible, source-faithful RDP core, and alignment data stay in the browser.
+Instructors: use the [run sheet](INSTRUCTOR_GUIDE.md) and [answer key](ANSWER_KEY.md).
 
-## What WebRDP currently provides
+## Learning objectives
 
-- RDP, GENECONV, MaxChi, CHIMAERA, 3SEQ, BootScan, and SISCAN discovery lanes
-- Method-specific evidence plots
-- Breakpoint alignment review
-- Regional trees and PHYLPRO profiles
-- Review controls and export views
+By the end of the practical, participants should be able to:
 
-> BootScan and SISCAN are currently described by the developers as source-shaped but unvalidated until full cyclic integration is completed. Treat those lanes accordingly.
+- explain why recombination can mislead phylogenetic inference;
+- recognize a recombinant sequence and candidate parental lineages;
+- compare support across multiple detection methods;
+- inspect breakpoint evidence and regional phylogenies;
+- distinguish an automated candidate event from a reviewed biological conclusion; and
+- export a reproducible result record.
 
-## Suggested workflow
+## Why WebRDP
 
-1. Prepare a nucleotide multiple-sequence alignment.
-2. Open WebRDP and load the alignment.
-3. Choose the appropriate discovery methods and settings.
-4. Review supported events across methods rather than accepting raw calls automatically.
-5. Inspect breakpoint alignments, evidence plots, and regional phylogenies.
-6. Export the reviewed results and record the WebRDP/core version used.
+nextRDP Web is a browser interface for the source-faithful, WebAssembly-compatible nextRDP core. It provides RDP, GENECONV, MaxChi, CHIMAERA, 3SEQ, BootScan, and SISCAN discovery lanes, evidence plots, breakpoint alignments, regional trees, PHYLPRO profiles, review controls, and exports. Alignment data remain inside the browser.
 
-## Upstream projects
+> The upstream developers currently label the BootScan and SISCAN lanes as source-shaped but unvalidated pending full cyclic integration. Treat them as supporting/exploratory evidence during this lesson.
 
-- [nextRDP Web application](https://github.com/MurrellGroup/nextRDPweb)
+## Repository map
+
+- `LESSON.md` — student-facing practical
+- `WORKSHEET.md` — observations and interpretation prompts
+- `INSTRUCTOR_GUIDE.md` — timing, teaching cues, troubleshooting, and debrief
+- `ANSWER_KEY.md` — expected qualitative findings for the synthetic example
+- `data/veme_synthetic_recombination.fasta` — aligned, synthetic teaching data
+
+## Upstream resources
+
+- [nextRDP Web](https://murrellgroup.github.io/nextRDPweb/)
+- [nextRDP Web source](https://github.com/MurrellGroup/nextRDPweb)
 - [nextRDP core](https://github.com/MurrellGroup/nextRDP-core)
 - [RDP home page](https://web.cbio.uct.ac.za/~darren/rdp.html)
 - [RDP5 paper](https://doi.org/10.1093/ve/veaa087)
@@ -38,6 +48,6 @@ No Python, Miniconda, Dash server, or local OpenRDP installation is required. An
 
 Martin DP, Varsani A, Roumagnac P, Botha G, Maslamoney S, Schwab T, Kelz Z, Kumar V, and Murrell B. (2021). RDP5: a computer program for analyzing recombination in, and removing signals of recombination from, nucleotide sequence datasets. *Virus Evolution*, 7, veaa087. https://doi.org/10.1093/ve/veaa087
 
-## Repository history
+## Data note
 
-The initial commit explored a separate Python Dash wrapper around OpenRDP. That approach was retired after consultation with Darren Martin in favor of the actively developed, source-faithful WebRDP application. The original prototype remains available in Git history.
+The included alignment is entirely synthetic and designed only for teaching. It contains no patient, outbreak, or unpublished research data.
