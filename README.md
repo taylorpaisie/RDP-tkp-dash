@@ -1,43 +1,43 @@
-# OpenRDP Dash
+# WebRDP workflow companion
 
-An experimental web interface for running and exploring recombination scans with [OpenRDP](https://github.com/PoonLab/OpenRDP). It is inspired by the broader analysis workflow in [RDP5](https://web.cbio.uct.ac.za/~darren/rdp.html), but it is not affiliated with or a replacement for RDP5.
+This repository now points to **[nextRDP Web](https://murrellgroup.github.io/nextRDPweb/)**, the browser-based RDP implementation recommended by Darren Martin.
 
-## Features
+## Launch WebRDP
 
-- Upload aligned nucleotide sequences in FASTA format
-- Validate names and alignment lengths before analysis
-- Select any of OpenRDP's seven methods
-- Run OpenRDP through its command-line interface
-- Filter results by method and p-value
-- Explore breakpoint intervals in an interactive Plotly chart
-- Download filtered results as CSV
-- Load a built-in demo result without installing OpenRDP
+**[Open nextRDP Web →](https://murrellgroup.github.io/nextRDPweb/)**
 
-## Quick start
+No Python, Miniconda, Dash server, or local OpenRDP installation is required. Analysis runs in the browser through a WebAssembly-compatible, source-faithful RDP core, and alignment data stay in the browser.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python app.py
-```
+## What WebRDP currently provides
 
-Open <http://127.0.0.1:8050>.
+- RDP, GENECONV, MaxChi, CHIMAERA, 3SEQ, BootScan, and SISCAN discovery lanes
+- Method-specific evidence plots
+- Breakpoint alignment review
+- Regional trees and PHYLPRO profiles
+- Review controls and export views
 
-OpenRDP is installed directly from its upstream GitHub repository. Some bundled third-party methods have non-commercial or academic-use license restrictions; review the upstream licenses before use. Uploaded files are written only to a temporary directory and removed after each run.
+> BootScan and SISCAN are currently described by the developers as source-shaped but unvalidated until full cyclic integration is completed. Treat those lanes accordingly.
 
-## Docker
+## Suggested workflow
 
-```bash
-docker build -t openrdp-dash .
-docker run --rm -p 8050:8050 openrdp-dash
-```
+1. Prepare a nucleotide multiple-sequence alignment.
+2. Open WebRDP and load the alignment.
+3. Choose the appropriate discovery methods and settings.
+4. Review supported events across methods rather than accepting raw calls automatically.
+5. Inspect breakpoint alignments, evidence plots, and regional phylogenies.
+6. Export the reviewed results and record the WebRDP/core version used.
 
-## Scope
+## Upstream projects
 
-This first version is a thin, reproducible web layer over the OpenRDP CLI. A useful next phase would expose method-specific configuration, add alignment previews, persist run manifests, and test output compatibility against curated RDP5 examples.
+- [nextRDP Web application](https://github.com/MurrellGroup/nextRDPweb)
+- [nextRDP core](https://github.com/MurrellGroup/nextRDP-core)
+- [RDP home page](https://web.cbio.uct.ac.za/~darren/rdp.html)
+- [RDP5 paper](https://doi.org/10.1093/ve/veaa087)
 
-## Disclaimer
+## Citation
 
-Research software only. Results should be reviewed with appropriate controls and biological context.
+Martin DP, Varsani A, Roumagnac P, Botha G, Maslamoney S, Schwab T, Kelz Z, Kumar V, and Murrell B. (2021). RDP5: a computer program for analyzing recombination in, and removing signals of recombination from, nucleotide sequence datasets. *Virus Evolution*, 7, veaa087. https://doi.org/10.1093/ve/veaa087
 
+## Repository history
+
+The first commit explored a separate Python Dash wrapper around OpenRDP. That approach was retired after consultation with Darren Martin in favor of the actively developed, source-faithful WebRDP application. The original prototype remains available in Git history.
