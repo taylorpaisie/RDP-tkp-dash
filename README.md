@@ -1,6 +1,6 @@
-# WebRDP workflow companion
+# RDP-tkp
 
-This repository now points to **[nextRDP Web](https://murrellgroup.github.io/nextRDPweb/)**, the browser-based RDP implementation recommended by Darren Martin.
+A compact workflow companion for **[nextRDP Web](https://murrellgroup.github.io/nextRDPweb/)**, the browser-based RDP implementation recommended by Darren Martin.
 
 ## Launch WebRDP
 
@@ -40,4 +40,4 @@ Martin DP, Varsani A, Roumagnac P, Botha G, Maslamoney S, Schwab T, Kelz Z, Kuma
 
 ## Repository history
 
-The first commit explored a separate Python Dash wrapper around OpenRDP. That approach was retired after consultation with Darren Martin in favor of the actively developed, source-faithful WebRDP application. The original prototype remains available in Git history.
+The initial commit explored a separate Python Dash wrapper around OpenRDP. That approach was retired after consultation with Darren Martin in favor of the actively developed, source-faithful WebRDP application. The original prototype remains available in Git history.
