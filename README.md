@@ -1,40 +1,67 @@
-# RDP-tkp — VEME 2026 practical
+# RDP-tkp Visualizer
 
-Hands-on materials for the VEME recombination-detection lesson led by Darren Martin, with Taylor Paisie assisting.
+A Dash app for exploring RDP teaching files and exported recombination-event results. It complements **[nextRDP Web](https://murrellgroup.github.io/nextRDPweb/)**; it does not rerun or replace RDP.
 
-## Start here
+## What it visualizes
 
-1. Open the [student lesson](LESSON.md).
-2. Download the [synthetic teaching alignment](data/veme_synthetic_recombination.fasta).
-3. Launch **[nextRDP Web](https://murrellgroup.github.io/nextRDPweb/)**.
-4. Record observations in the [student worksheet](WORKSHEET.md).
+### FASTA alignments
 
-Instructors: use the [run sheet](INSTRUCTOR_GUIDE.md) and [answer key](ANSWER_KEY.md).
+- sequence count and aligned length;
+- per-sequence gap and ambiguity rates;
+- sliding-window variable-site counts;
+- sliding-window nucleotide entropy; and
+- sortable sequence-level QC.
 
-## Learning objectives
+### Exported RDP results
 
-By the end of the practical, participants should be able to:
+Upload a CSV or TSV containing at least recombinant, start, and end columns. Common column-name variants are recognized. The app shows:
 
-- explain why recombination can mislead phylogenetic inference;
-- recognize a recombinant sequence and candidate parental lineages;
-- compare support across multiple detection methods;
-- inspect breakpoint evidence and regional phylogenies;
-- distinguish an automated candidate event from a reviewed biological conclusion; and
-- export a reproducible result record.
+- candidate breakpoint intervals;
+- events by recombinant and method;
+- parental labels and p-values when present; and
+- a sortable/filterable event table.
 
-## Why WebRDP
+### RDP5 project files
 
-nextRDP Web is a browser interface for the source-faithful, WebAssembly-compatible nextRDP core. It provides RDP, GENECONV, MaxChi, CHIMAERA, 3SEQ, BootScan, and SISCAN discovery lanes, evidence plots, breakpoint alignments, regional trees, PHYLPRO profiles, review controls, and exports. Alignment data remain inside the browser.
+The app validates the `RDP5 Project File` signature and extracts a best-effort inventory of probable sequence/project labels. The binary `.rdp5` format is not publicly documented, so the app deliberately does **not** claim event-level parsing from project binaries. Export results to CSV/TSV from RDP for full event visualization.
 
-> The upstream developers currently label the BootScan and SISCAN lanes as source-shaped but unvalidated pending full cyclic integration. Treat them as supporting/exploratory evidence during this lesson.
+## VEME lesson files tested
 
-## Repository map
+| File | Type | Observed structure |
+|---|---|---|
+| Exercise 1 alignment.fas | FASTA alignment | 25 sequences × 9,594 sites |
+| Exercise 2 alignment.fas | FASTA alignment | 50 sequences × 8,108 sites |
+| Exercise 3 RDP project file.rdp5 | RDP5 project | 34.8 MB binary project with a valid RDP5 signature |
 
-- `LESSON.md` — student-facing practical
-- `WORKSHEET.md` — observations and interpretation prompts
-- `INSTRUCTOR_GUIDE.md` — timing, teaching cues, troubleshooting, and debrief
-- `ANSWER_KEY.md` — expected qualitative findings for the synthetic example
-- `data/veme_synthetic_recombination.fasta` — aligned, synthetic teaching data
+The course files are not committed here because the repository is public and the large project file may contain bundled reference data. Students can upload the copies distributed during the lesson.
+
+## Install
+
+```bash
+git clone https://github.com/taylorpaisie/RDP-tkp-dash.git
+cd RDP-tkp-dash
+conda create -n rdp-tkp python=3.11 pip -y
+conda activate rdp-tkp
+pip install -r requirements.txt
+python app.py
+```
+
+Open <http://127.0.0.1:8050>.
+
+## Docker
+
+```bash
+docker build -t rdp-tkp .
+docker run --rm -p 8050:8050 rdp-tkp
+```
+
+## Recommended lesson flow
+
+1. Upload Exercise 1 and discuss alignment QC and localized variability.
+2. Upload Exercise 2 and compare diversity/gap profiles with Exercise 1.
+3. Upload the Exercise 3 project to inspect its project/sequence inventory.
+4. Open [nextRDP Web](https://murrellgroup.github.io/nextRDPweb/) for recombination detection and evidence review.
+5. Export an event table and return to this app for breakpoint and method-level visualization.
 
 ## Upstream resources
 
@@ -44,10 +71,6 @@ nextRDP Web is a browser interface for the source-faithful, WebAssembly-compatib
 - [RDP home page](https://web.cbio.uct.ac.za/~darren/rdp.html)
 - [RDP5 paper](https://doi.org/10.1093/ve/veaa087)
 
-## Citation
+## Disclaimer
 
-Martin DP, Varsani A, Roumagnac P, Botha G, Maslamoney S, Schwab T, Kelz Z, Kumar V, and Murrell B. (2021). RDP5: a computer program for analyzing recombination in, and removing signals of recombination from, nucleotide sequence datasets. *Virus Evolution*, 7, veaa087. https://doi.org/10.1093/ve/veaa087
-
-## Data note
-
-The included alignment is entirely synthetic and designed only for teaching. It contains no patient, outbreak, or unpublished research data.
+Teaching and exploratory visualization only. Candidate events require alignment review, method-specific evidence assessment, phylogenetic context, and biological interpretation.
