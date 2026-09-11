@@ -56,6 +56,10 @@ Confidence is expressed in percentage points. A value near zero indicates that t
 
 Hover over a segment to inspect its coordinates, closest parent, mean identity, and mean confidence.
 
+### Candidate parental-contribution graph
+
+The **Contribution graph** tab converts the selected similarity comparison into a parent-to-query flow diagram. Link width represents the proportion of sliding windows assigned to each candidate parent; link color matches the similarity and mosaic panels. Hover details and the companion table report genome share, mean pairwise identity, and mean best-parent lead. These are similarity-derived candidate contributions rather than decoded RDP event calls.
+
 ### FASTA alignment QC
 
 FASTA inputs provide:
