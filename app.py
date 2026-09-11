@@ -213,6 +213,7 @@ app.layout=dbc.Container([
                 ],className="g-3 mt-1")
             ]),className="my-3"),
             dcc.Graph(id="similarity-chart",config={"displaylogo":False}),
+            dcc.Graph(id="mosaic-chart",config={"displaylogo":False}),
             dbc.Alert("Similarity switches can identify regions worth investigating, but this plot is not itself a recombination test.",color="warning")
         ],label="Similarity scan"),
         dbc.Tab([html.Div(id="summary-cards",className="my-3"),dash_table.DataTable(id="table",page_size=15,sort_action="native",filter_action="native",
@@ -297,26 +298,59 @@ def similarity_controls(data):
     return options,(0 if options else None),options,list(range(1,min(4,len(options))))
 
 
-@callback(Output("similarity-chart","figure"),Input("parsed","data"),Input("query-sequence","value"),
+@callback(Output("similarity-chart","figure"),Output("mosaic-chart","figure"),Input("parsed","data"),Input("query-sequence","value"),
           Input("parent-sequences","value"),Input("similarity-window","value"),Input("similarity-step","value"))
 def render_similarity(data,query_index,parent_indices,window,step):
     blank=px.line(title="Upload an RDP5 project to compare sequence similarity")
-    if not data or data.get("kind")!="project" or query_index is None:return blank
+    blank_mosaic=px.scatter(title="Select at least two candidate parents to build a mosaic map")
+    if not data or data.get("kind")!="project" or query_index is None:return blank,blank_mosaic
     overview=data.get("overview",{}); seqs=overview.get("sequences_raw",[])
     labels=[row.get("Sequence label",f"Sequence {i+1}") for i,row in enumerate(data.get("labels",[]))]
     labels=(labels+[f"Sequence {i+1}" for i in range(len(labels),len(seqs))])[:len(seqs)]
-    if not 0<=int(query_index)<len(seqs):return blank
+    if not 0<=int(query_index)<len(seqs):return blank,blank_mosaic
     parents=[int(i) for i in (parent_indices or []) if int(i)!=int(query_index) and 0<=int(i)<len(seqs)][:4]
-    fig=go.Figure()
+    fig=go.Figure(); curves=[]; positions=[]
     for i in parents:
         x,y=sliding_pairwise_identity(seqs[int(query_index)],seqs[i],int(window or 300),int(step or 50))
+        positions=x; curves.append(y)
         hover="Site %{x:,}<br>Identity %{y:.2f}%<extra>"+labels[i]+"</extra>"
         fig.add_trace(go.Scatter(x=x,y=y,mode="lines",name=labels[i],line=dict(width=3),hovertemplate=hover))
     fig.update_layout(template="plotly_white",title=f"Sliding-window similarity to {labels[int(query_index)]}",
         xaxis_title="Alignment position (nt)",yaxis_title="Pairwise identity (%)",hovermode="x unified",
         legend_title="Candidate parent",height=620,margin=dict(l=55,r=25,t=70,b=50))
     fig.update_yaxes(range=[0,100])
-    return fig
+    if len(curves)<2:return fig,blank_mosaic
+    scores=np.asarray(curves,dtype=float); safe=np.where(np.isnan(scores),-np.inf,scores)
+    raw_winners=np.argmax(safe,axis=0)
+    # Suppress one-window flicker caused by nearly tied, overlapping windows.
+    winners=raw_winners.copy()
+    for j in range(len(winners)):
+        local=raw_winners[max(0,j-2):min(len(winners),j+3)]
+        winners[j]=Counter(local).most_common(1)[0][0]
+    ranked=np.sort(safe,axis=0)
+    confidence=ranked[-1]-ranked[-2]
+    changes=np.where(winners[1:]!=winners[:-1])[0]+1
+    palette=["#2166ac","#d6604d","#1b9e77","#984ea3"]
+    for change in changes:
+        fig.add_vline(x=positions[change],line_width=1,line_dash="dot",line_color="#475569",opacity=.65)
+    winner_names=[labels[parents[i]] for i in winners]
+    colorscale=[]
+    for i,color in enumerate(palette[:len(parents)]):
+        lo=i/max(1,len(parents)-1); hi=(i+0.999)/max(1,len(parents)-1)
+        colorscale.extend([[min(lo,1),color],[min(hi,1),color]])
+    custom=np.stack([np.asarray(winner_names,dtype=object),np.round(confidence,2)],axis=-1)[None,:,:]
+    mosaic=go.Figure(go.Heatmap(z=winners[None,:],x=positions,y=["Closest parent"],customdata=custom,
+        zmin=0,zmax=max(1,len(parents)-1),colorscale=colorscale,showscale=False,
+        hovertemplate="Site %{x:,}<br>%{customdata[0]}<br>Lead over next parent: %{customdata[1]:.2f} pp<extra></extra>"))
+    for i,parent in enumerate(parents):
+        mosaic.add_trace(go.Scatter(x=[None],y=[None],mode="markers",marker=dict(size=12,symbol="square",color=palette[i]),name=labels[parent]))
+    for change in changes:
+        mosaic.add_vline(x=positions[change],line_width=2,line_color="#172033")
+    mosaic.update_layout(template="plotly_white",title="Candidate recombination mosaic",
+        xaxis_title="Alignment position (nt)",height=260,margin=dict(l=75,r=25,t=65,b=45),
+        legend=dict(orientation="h",y=1.22,x=1,xanchor="right"),hovermode="x")
+    mosaic.update_yaxes(fixedrange=True)
+    return fig,mosaic
 
 
 if __name__=="__main__":app.run(debug=True,host="0.0.0.0",port=8050)
