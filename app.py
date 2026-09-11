@@ -27,6 +27,18 @@ EVENT_ALIASES = {
 PARENT_COLORS = ["#0072B2", "#E69F00", "#009E73", "#CC79A7"]
 
 
+def empty_figure(title: str) -> go.Figure:
+    """Return a stable placeholder without invoking Plotly Express internals."""
+    figure=go.Figure()
+    figure.update_layout(
+        template="plotly_white",title=title,height=420,
+        xaxis=dict(visible=False),yaxis=dict(visible=False),
+        annotations=[dict(text=title,x=.5,y=.5,xref="paper",yref="paper",showarrow=False,
+                          font=dict(size=17,color="#637083"))],
+        margin=dict(l=35,r=35,t=65,b=35))
+    return figure
+
+
 def decode_upload(contents: str) -> bytes:
     return base64.b64decode(contents.split(",", 1)[1])
 
@@ -192,12 +204,12 @@ def sliding_pairwise_identity(query: str, parent: str, window: int = 300, step: 
     return centers,identity
 
 
-app=Dash(__name__,external_stylesheets=[dbc.themes.FLATLY],title="RDP Visualizer")
+app=Dash(__name__,external_stylesheets=[dbc.themes.FLATLY],title="RDP-tkp Visualizer")
 server=app.server
 app.layout=dbc.Container([
     dcc.Store(id="parsed"),
     html.H1("RDP-tkp Visualizer",className="display-5 fw-bold mt-4"),
-    html.P("Explore alignments and exported RDP event tables without rerunning an analysis. Darren is dumb.",className="lead text-secondary"),
+    html.P("Explore alignments and exported RDP event tables without rerunning an analysis.",className="lead text-secondary"),
     dbc.Alert(["For detection and event review, use ",html.A("nextRDP Web",href="https://murrellgroup.github.io/nextRDPweb/",target="_blank"),"."],color="info"),
     dbc.Card(dbc.CardBody([
         dcc.Upload(id="upload",children=html.Div(["Drop FASTA, CSV/TSV, or RDP5 project file here — or ",html.A("browse")]),
@@ -256,7 +268,7 @@ def ingest(contents,filename):
 
 @callback(Output("primary-chart","figure"),Output("secondary-chart","figure"),Output("table","data"),Output("table","columns"),Output("summary-cards","children"),Input("parsed","data"))
 def render(data):
-    blank=px.scatter(title="Upload a lesson file or exported event table")
+    blank=empty_figure("Upload a lesson file or exported event table")
     if not data:return blank,blank,[],[],""
     kind=data["kind"]
     if kind=="alignment":
@@ -306,8 +318,8 @@ def similarity_controls(data):
 @callback(Output("similarity-chart","figure"),Output("mosaic-chart","figure"),Input("parsed","data"),Input("query-sequence","value"),
           Input("parent-sequences","value"),Input("similarity-window","value"),Input("similarity-step","value"))
 def render_similarity(data,query_index,parent_indices,window,step):
-    blank=px.line(title="Upload an RDP5 project to compare sequence similarity")
-    blank_mosaic=px.scatter(title="Select at least two candidate parents to build a mosaic map")
+    blank=empty_figure("Upload an RDP5 project to compare sequence similarity")
+    blank_mosaic=empty_figure("Select at least two candidate parents to build a mosaic map")
     if not data or data.get("kind")!="project" or query_index is None:return blank,blank_mosaic
     overview=data.get("overview",{}); seqs=overview.get("sequences_raw",[])
     labels=[row.get("Sequence label",f"Sequence {i+1}") for i,row in enumerate(data.get("labels",[]))]
