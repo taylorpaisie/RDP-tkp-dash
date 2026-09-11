@@ -169,10 +169,22 @@ def rdp5_alignment_overview(raw: bytes, labels: pd.DataFrame, bins: int = 120, m
     keep=order[np.linspace(0,len(order)-1,min(max_tracks,len(order)),dtype=int)]
     label_names=labels.get("Sequence label",pd.Series(dtype=str)).tolist()
     names=[label_names[i] if i<len(label_names) else f"Sequence {i+1}" for i in keep]
-    return {"matrix":np.round(matrix[keep],2).tolist(),"names":names,
+    return {"matrix":np.round(matrix[keep],2).tolist(),"names":names,"sequences_raw":runs,
             "x":[int((a+b)/2)+1 for a,b in zip(edges[:-1],edges[1:])],
             "diversity":np.round(diversity,2).tolist(),"gaps":np.round(gaps,2).tolist(),
             "length":length,"sequences":len(runs)}
+
+
+def sliding_pairwise_identity(query: str, parent: str, window: int = 300, step: int = 50) -> tuple[list[int],list[float]]:
+    """Pairwise identity using only sites called A/C/G/T in both sequences."""
+    length=min(len(query),len(parent)); window=max(20,min(window,length)); step=max(1,step)
+    centers=[]; identity=[]
+    for left in range(0,max(1,length-window+1),step):
+        right=min(left+window,length); q=np.asarray(list(query[left:right])); p=np.asarray(list(parent[left:right]))
+        valid=np.isin(q,list("ACGT")) & np.isin(p,list("ACGT"))
+        centers.append(left+(right-left)//2+1)
+        identity.append(round(100*float(np.mean(q[valid]==p[valid])),2) if valid.any() else np.nan)
+    return centers,identity
 
 
 app=Dash(__name__,external_stylesheets=[dbc.themes.FLATLY],title="RDP-tkp Visualizer")
@@ -189,6 +201,20 @@ app.layout=dbc.Container([
     ]),className="mb-3"),
     dbc.Tabs([
         dbc.Tab([dcc.Graph(id="primary-chart",config={"displaylogo":False}),dcc.Graph(id="secondary-chart",config={"displaylogo":False})],label="Visual overview"),
+        dbc.Tab([
+            dbc.Card(dbc.CardBody([
+                dbc.Row([
+                    dbc.Col([dbc.Label("Query / suspected recombinant"),dcc.Dropdown(id="query-sequence",clearable=False)],md=5),
+                    dbc.Col([dbc.Label("Candidate parents (up to 4)"),dcc.Dropdown(id="parent-sequences",multi=True)],md=7)
+                ],className="g-3"),
+                dbc.Row([
+                    dbc.Col([dbc.Label("Window (nt)"),dcc.Slider(id="similarity-window",min=100,max=800,step=50,value=300,marks={100:"100",300:"300",500:"500",800:"800"})],md=8),
+                    dbc.Col([dbc.Label("Step (nt)"),dcc.Dropdown(id="similarity-step",options=[25,50,100,200],value=50,clearable=False)],md=4)
+                ],className="g-3 mt-1")
+            ]),className="my-3"),
+            dcc.Graph(id="similarity-chart",config={"displaylogo":False}),
+            dbc.Alert("Similarity switches can identify regions worth investigating, but this plot is not itself a recombination test.",color="warning")
+        ],label="Similarity scan"),
         dbc.Tab([html.Div(id="summary-cards",className="my-3"),dash_table.DataTable(id="table",page_size=15,sort_action="native",filter_action="native",
                  style_table={"overflowX":"auto"},style_cell={"fontFamily":"system-ui","fontSize":13,"padding":"7px"})],label="Data & QC"),
         dbc.Tab(dbc.Card(dbc.CardBody([
@@ -258,6 +284,39 @@ def render(data):
     for fig in (primary,secondary):
         fig.update_layout(template="plotly_white",margin=dict(l=45,r=25,t=65,b=45),hoverlabel=dict(namelength=-1))
     return primary,secondary,frame.to_dict("records"),[{"name":c,"id":c} for c in frame.columns],summary
+
+
+@callback(Output("query-sequence","options"),Output("query-sequence","value"),
+          Output("parent-sequences","options"),Output("parent-sequences","value"),Input("parsed","data"))
+def similarity_controls(data):
+    if not data or data.get("kind")!="project": return [],None,[],[]
+    overview=data.get("overview",{}); seqs=overview.get("sequences_raw",[])
+    labels=[row.get("Sequence label",f"Sequence {i+1}") for i,row in enumerate(data.get("labels",[]))]
+    labels=(labels+[f"Sequence {i+1}" for i in range(len(labels),len(seqs))])[:len(seqs)]
+    options=[{"label":name,"value":i} for i,name in enumerate(labels)]
+    return options,(0 if options else None),options,list(range(1,min(4,len(options))))
+
+
+@callback(Output("similarity-chart","figure"),Input("parsed","data"),Input("query-sequence","value"),
+          Input("parent-sequences","value"),Input("similarity-window","value"),Input("similarity-step","value"))
+def render_similarity(data,query_index,parent_indices,window,step):
+    blank=px.line(title="Upload an RDP5 project to compare sequence similarity")
+    if not data or data.get("kind")!="project" or query_index is None:return blank
+    overview=data.get("overview",{}); seqs=overview.get("sequences_raw",[])
+    labels=[row.get("Sequence label",f"Sequence {i+1}") for i,row in enumerate(data.get("labels",[]))]
+    labels=(labels+[f"Sequence {i+1}" for i in range(len(labels),len(seqs))])[:len(seqs)]
+    if not 0<=int(query_index)<len(seqs):return blank
+    parents=[int(i) for i in (parent_indices or []) if int(i)!=int(query_index) and 0<=int(i)<len(seqs)][:4]
+    fig=go.Figure()
+    for i in parents:
+        x,y=sliding_pairwise_identity(seqs[int(query_index)],seqs[i],int(window or 300),int(step or 50))
+        hover="Site %{x:,}<br>Identity %{y:.2f}%<extra>"+labels[i]+"</extra>"
+        fig.add_trace(go.Scatter(x=x,y=y,mode="lines",name=labels[i],line=dict(width=3),hovertemplate=hover))
+    fig.update_layout(template="plotly_white",title=f"Sliding-window similarity to {labels[int(query_index)]}",
+        xaxis_title="Alignment position (nt)",yaxis_title="Pairwise identity (%)",hovermode="x unified",
+        legend_title="Candidate parent",height=620,margin=dict(l=55,r=25,t=70,b=50))
+    fig.update_yaxes(range=[0,100])
+    return fig
 
 
 if __name__=="__main__":app.run(debug=True,host="0.0.0.0",port=8050)
