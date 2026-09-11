@@ -25,6 +25,8 @@ Upload a CSV or TSV containing at least recombinant, start, and end columns. Com
 
 The app validates the `RDP5 Project File` signature, extracts the embedded alignment and fixed-width sequence-label inventory, and renders an RDP-style alignment overview plus a genome-wide divergence/gap profile. Label metadata remain available in the sortable table. The binary `.rdp5` event format is not publicly documented, so the app deliberately does **not** claim event-level parsing from project binaries. Export results to CSV/TSV from RDP for full event visualization.
 
+The **Similarity scan** tab provides a BootScan-style teaching view. Select a query or suspected recombinant, compare it with up to four candidate parents, and adjust the sliding-window and step sizes. Curves show pairwise nucleotide identity at sites called A/C/G/T in both sequences. Similarity switches identify regions worth investigating; they are not independently interpreted as recombination calls.
+
 ## VEME lesson files tested
 
 | File | Type | Observed structure |
