@@ -109,11 +109,21 @@ def inspect_rdp5(raw: bytes) -> pd.DataFrame:
     # embedded alignment is not mistaken for thousands of project labels.
     alignment_start=re.search(rb"[ACGTN?-]{250,}",raw)
     header=raw[:alignment_start.start()] if alignment_start else raw[:2_000_000]
-    chunks=re.findall(rb"[A-Za-z0-9][A-Za-z0-9_.-]{5,95}",header)
+    # Sequence names are stored as 100-byte, space-padded fields introduced
+    # by the two-byte marker ``d\0``.  Parsing the fields directly also keeps
+    # perfectly valid short lesson labels such as A, B, ... Y.
+    fields=re.findall(rb"d\x00([^\x00]{1,100})",header)
     seen=[]
-    for chunk in chunks:
-        value=chunk.decode("ascii",errors="ignore").strip("._-")
-        if ("." in value or "_" in value) and value not in seen and not value.isdigit(): seen.append(value)
+    for field in fields:
+        value=field.decode("ascii",errors="ignore").strip()
+        if value and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_. -]{0,99}",value) and value not in seen:
+            seen.append(value)
+    # Fallback for project variants that do not use the fixed-width marker.
+    if not seen:
+        chunks=re.findall(rb"[A-Za-z0-9][A-Za-z0-9_.-]{5,95}",header)
+        for chunk in chunks:
+            value=chunk.decode("ascii",errors="ignore").strip("._-")
+            if ("." in value or "_" in value) and value not in seen and not value.isdigit(): seen.append(value)
     rows=[]
     for label in seen[:5000]:
         parts=label.split(".")
@@ -126,7 +136,8 @@ def inspect_rdp5(raw: bytes) -> pd.DataFrame:
             value=int(year); year=str(1900+value if value>=70 else 2000+value)
         elif year.lower()=="x": year="Unknown"
         rows.append({"Sequence label":label,"Subtype":subtype or "Unknown","Country code":country,"Year":year})
-    return pd.DataFrame(rows).drop_duplicates("Sequence label")
+    columns=["Sequence label","Subtype","Country code","Year"]
+    return pd.DataFrame(rows,columns=columns).drop_duplicates("Sequence label")
 
 
 def rdp5_alignment_overview(raw: bytes, labels: pd.DataFrame, bins: int = 120, max_tracks: int = 72) -> dict:
@@ -150,7 +161,7 @@ def rdp5_alignment_overview(raw: bytes, labels: pd.DataFrame, bins: int = 120, m
         gaps.append(float(100*np.mean(~valid)))
     order=np.argsort(matrix.mean(axis=1))[::-1]
     keep=order[np.linspace(0,len(order)-1,min(max_tracks,len(order)),dtype=int)]
-    label_names=labels["Sequence label"].tolist()
+    label_names=labels.get("Sequence label",pd.Series(dtype=str)).tolist()
     names=[label_names[i] if i<len(label_names) else f"Sequence {i+1}" for i in keep]
     return {"matrix":np.round(matrix[keep],2).tolist(),"names":names,
             "x":[int((a+b)/2)+1 for a,b in zip(edges[:-1],edges[1:])],
