@@ -27,6 +27,8 @@ The app validates the `RDP5 Project File` signature, extracts the embedded align
 
 The **Similarity scan** tab provides a BootScan-style teaching view. Select a query or suspected recombinant, compare it with up to four candidate parents, and adjust the sliding-window and step sizes. Curves show pairwise nucleotide identity at sites called A/C/G/T in both sequences. Similarity switches identify regions worth investigating; they are not independently interpreted as recombination calls.
 
+Below the curves, a **candidate recombination mosaic** colors each window by its closest selected parent and marks parent-switch transitions. Hover text reports the winning parent and its percentage-point lead over the next-closest parent. These transitions are exploratory candidates, not confirmed RDP breakpoints.
+
 ## VEME lesson files tested
 
 | File | Type | Observed structure |
