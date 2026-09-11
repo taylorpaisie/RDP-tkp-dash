@@ -1,10 +1,64 @@
 # RDP-tkp Visualizer
 
-A Dash app for exploring RDP teaching files and exported recombination-event results. It complements **[nextRDP Web](https://murrellgroup.github.io/nextRDPweb/)**; it does not rerun or replace RDP.
+An interactive Dash app for teaching, exploring, and presenting recombination evidence from RDP lesson files. It complements [RDP](https://web.cbio.uct.ac.za/~darren/rdp.html) and [nextRDP Web](https://murrellgroup.github.io/nextRDPweb/); it does not rerun or replace their statistical detection methods.
 
-## What it visualizes
+## Features
 
-### FASTA alignments
+### RDP5 project overview
+
+Upload an `.rdp5` project to extract its embedded alignment and sequence labels. The overview provides:
+
+- an RDP-style alignment heatmap showing divergence from the consensus;
+- a genome-wide mean-divergence profile;
+- gap and uncalled-site coverage;
+- sequence, site, subtype, and country-code summaries; and
+- a searchable sequence-metadata table.
+
+The heatmap divides the alignment into 120 windows. For each sequence and window, divergence is calculated as:
+
+```text
+100 × called nucleotides different from the consensus / called nucleotides
+```
+
+Only A, C, G, and T contribute to the consensus and denominator. Large projects display up to 72 representative tracks spanning the observed divergence range.
+
+### Similarity scan
+
+The **Similarity scan** tab provides a BootScan-style teaching view:
+
+1. Choose a query or suspected recombinant sequence.
+2. Select up to four candidate parents.
+3. Set a sliding window from 100–800 nucleotides.
+4. Choose a step of 25, 50, 100, or 200 nucleotides.
+
+The plot shows pairwise nucleotide identity between the query and each selected parent. Sites are included only when both sequences contain A, C, G, or T. The identity axis automatically zooms to the informative range.
+
+Candidate parents keep the same color in every panel using a colorblind-friendly palette:
+
+| Parent | Color |
+|---|---|
+| 1 | Blue |
+| 2 | Orange |
+| 3 | Teal |
+| 4 | Magenta |
+
+### Candidate recombination mosaic
+
+The mosaic summarizes similarity switching along the genome:
+
+- each segment is colored by the closest selected parent;
+- adjacent windows assigned to the same parent are merged;
+- vertical lines indicate closest-parent transitions;
+- a five-window categorical smoother suppresses isolated parent flicker; and
+- the confidence panel shows the identity lead over the second-closest parent.
+
+Confidence is expressed in percentage points. A value near zero indicates that the two best parents are effectively tied. A larger, sustained lead makes the displayed parental assignment more distinct, but it does not establish statistical support for recombination.
+
+Hover over a segment to inspect its coordinates, closest parent, mean identity, and mean confidence.
+
+### FASTA alignment QC
+
+FASTA inputs provide:
 
 - sequence count and aligned length;
 - per-sequence gap and ambiguity rates;
@@ -12,36 +66,38 @@ A Dash app for exploring RDP teaching files and exported recombination-event res
 - sliding-window nucleotide entropy; and
 - sortable sequence-level QC.
 
-### Exported RDP results
+### Exported RDP event tables
 
-Upload a CSV or TSV containing at least recombinant, start, and end columns. Common column-name variants are recognized. The app shows:
+CSV and TSV tables must contain recombinant, start, and end fields. Common column-name variants are accepted. When present, method, parental-label, and p-value fields are also retained. The app displays:
 
 - candidate breakpoint intervals;
 - events by recombinant and method;
-- parental labels and p-values when present; and
-- a sortable/filterable event table.
+- parental labels and p-values; and
+- a sortable and filterable event table.
 
-### RDP5 project files
+## Important interpretation note
 
-The app validates the `RDP5 Project File` signature, extracts the embedded alignment and fixed-width sequence-label inventory, and renders an RDP-style alignment overview plus a genome-wide divergence/gap profile. Label metadata remain available in the sortable table. The binary `.rdp5` event format is not publicly documented, so the app deliberately does **not** claim event-level parsing from project binaries. Export results to CSV/TSV from RDP for full event visualization.
+The `.rdp5` project format is a proprietary binary format. This app extracts the embedded alignment and sequence names, but it does **not** claim to decode RDP's stored event calls, corrected p-values, or method support from the binary file.
 
-The **Similarity scan** tab provides a BootScan-style teaching view. Select a query or suspected recombinant, compare it with up to four candidate parents, and adjust the sliding-window and step sizes. Curves show pairwise nucleotide identity at sites called A/C/G/T in both sequences. Similarity switches identify regions worth investigating; they are not independently interpreted as recombination calls.
+The similarity scan and mosaic are exploratory alignment visualizations. A change in the closest parent is a region to investigate—not a confirmed breakpoint. Recombination conclusions should incorporate RDP results, multiple-method support, breakpoint uncertainty, phylogenetic evidence, and biological context.
 
-Below the curves, a **candidate recombination mosaic** merges adjacent windows with the same closest parent into colored genome segments and marks parent-switch transitions. Its confidence panel reports the percentage-point identity lead over the next-closest parent; values near zero mean that the parental assignment is effectively tied. These transitions are exploratory candidates, not confirmed RDP breakpoints.
+For event-level visualizations, export a CSV or TSV results table from RDP and upload it separately.
 
-Candidate parents use a consistent colorblind-friendly blue, orange, teal, and magenta palette across the similarity curves, mosaic segments, and legend.
+## VEME 2026 lesson files tested
 
-## VEME lesson files tested
+| Exercise | Input | Validated structure |
+|---|---|---:|
+| Exercise 1 | FASTA and RDP5 | 25 sequences × 9,594 sites |
+| Exercise 2 | FASTA and RDP5 | 50 sequences × 8,108 sites |
+| Exercise 3 | RDP5 | 274 sequences × 9,556 sites; 34.8 MB project |
 
-| File | Type | Observed structure |
-|---|---|---|
-| Exercise 1 alignment.fas | FASTA alignment | 25 sequences × 9,594 sites |
-| Exercise 2 alignment.fas | FASTA alignment | 50 sequences × 8,108 sites |
-| Exercise 3 RDP project file.rdp5 | RDP5 project | 34.8 MB binary project with a valid RDP5 signature |
+All three RDP5 projects were tested through label extraction, alignment parsing, overview rendering, similarity scanning, mosaic generation, and metadata-table rendering.
 
-The course files are not committed here because the repository is public and the large project file may contain bundled reference data. Students can upload the copies distributed during the lesson.
+The course files are not committed because the repository is public and the projects may bundle reference data. Students should upload the files distributed with the lesson.
 
-## Install
+## Installation
+
+### Conda
 
 ```bash
 git clone https://github.com/taylorpaisie/RDP-tkp-dash.git
@@ -54,29 +110,34 @@ python app.py
 
 Open <http://127.0.0.1:8050>.
 
-## Docker
+If `conda` is unavailable inside WSL, install Miniconda in WSL first. A Conda installation on Windows is not automatically available inside the Linux environment.
+
+### Docker
 
 ```bash
 docker build -t rdp-tkp .
 docker run --rm -p 8050:8050 rdp-tkp
 ```
 
-## Recommended lesson flow
+## Suggested classroom workflow
 
-1. Upload Exercise 1 and discuss alignment QC and localized variability.
-2. Upload Exercise 2 and compare diversity/gap profiles with Exercise 1.
-3. Upload the Exercise 3 project to inspect its project/sequence inventory.
-4. Open [nextRDP Web](https://murrellgroup.github.io/nextRDPweb/) for recombination detection and evidence review.
-5. Export an event table and return to this app for breakpoint and method-level visualization.
+1. Upload Exercise 1 and review alignment quality, variable regions, and gaps.
+2. Open the similarity scan and choose a suspected recombinant and candidate parents.
+3. Change the window size to demonstrate the resolution-versus-noise tradeoff.
+4. Interpret the mosaic alongside its confidence panel, emphasizing weak near-ties.
+5. Repeat with Exercise 2 and compare the genome-wide signal.
+6. Use Exercise 3 to demonstrate scaling to hundreds of sequences.
+7. Review the formal event evidence in RDP or nextRDP Web.
+8. Upload an exported event table for breakpoint and method-level summaries.
 
 ## Upstream resources
 
+- [RDP home page](https://web.cbio.uct.ac.za/~darren/rdp.html)
+- [RDP5 paper](https://doi.org/10.1093/ve/veaa087)
 - [nextRDP Web](https://murrellgroup.github.io/nextRDPweb/)
 - [nextRDP Web source](https://github.com/MurrellGroup/nextRDPweb)
 - [nextRDP core](https://github.com/MurrellGroup/nextRDP-core)
-- [RDP home page](https://web.cbio.uct.ac.za/~darren/rdp.html)
-- [RDP5 paper](https://doi.org/10.1093/ve/veaa087)
 
 ## Disclaimer
 
-Teaching and exploratory visualization only. Candidate events require alignment review, method-specific evidence assessment, phylogenetic context, and biological interpretation.
+For teaching and exploratory visualization only. Inspect primary evidence before making biological conclusions.
