@@ -204,12 +204,12 @@ def sliding_pairwise_identity(query: str, parent: str, window: int = 300, step: 
     return centers,identity
 
 
-app=Dash(__name__,external_stylesheets=[dbc.themes.FLATLY],title="RDP-tkp Visualizer")
+app=Dash(__name__,external_stylesheets=[dbc.themes.FLATLY],title="RDP Visualizer")
 server=app.server
 app.layout=dbc.Container([
     dcc.Store(id="parsed"),
     html.H1("RDP-tkp Visualizer",className="display-5 fw-bold mt-4"),
-    html.P("Explore alignments and exported RDP event tables without rerunning an analysis.",className="lead text-secondary"),
+    html.P("Explore alignments and exported RDP event tables without rerunning an analysis. Darren is dumb.",className="lead text-secondary"),
     dbc.Alert(["For detection and event review, use ",html.A("nextRDP Web",href="https://murrellgroup.github.io/nextRDPweb/",target="_blank"),"."],color="info"),
     dbc.Card(dbc.CardBody([
         dcc.Upload(id="upload",children=html.Div(["Drop FASTA, CSV/TSV, or RDP5 project file here — or ",html.A("browse")]),
