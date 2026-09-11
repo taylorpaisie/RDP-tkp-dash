@@ -129,6 +129,35 @@ def inspect_rdp5(raw: bytes) -> pd.DataFrame:
     return pd.DataFrame(rows).drop_duplicates("Sequence label")
 
 
+def rdp5_alignment_overview(raw: bytes, labels: pd.DataFrame, bins: int = 120, max_tracks: int = 72) -> dict:
+    """Build an RDP-like, browser-sized overview from the embedded alignment."""
+    runs=[m.group().decode("ascii") for m in re.finditer(rb"[ACGTN?.-]{500,}",raw)]
+    if not runs:
+        return {"matrix":[],"names":[],"x":[],"diversity":[],"gaps":[],"length":0,"sequences":0}
+    length=min(map(len,runs)); arr=np.array([list(s[:length]) for s in runs],dtype="U1")
+    called=np.isin(arr,list("ACGT"))
+    consensus=[]
+    for col in arr.T:
+        counts=Counter(col[np.isin(col,list("ACGT"))]); consensus.append(counts.most_common(1)[0][0] if counts else "N")
+    consensus=np.asarray(consensus)
+    edges=np.linspace(0,length,bins+1,dtype=int)
+    matrix=np.zeros((len(runs),bins)); diversity=[]; gaps=[]
+    for j,(left,right) in enumerate(zip(edges[:-1],edges[1:])):
+        block=arr[:,left:right]; valid=called[:,left:right]
+        mismatch=(block!=consensus[left:right]) & valid
+        matrix[:,j]=100*mismatch.sum(axis=1)/np.maximum(valid.sum(axis=1),1)
+        diversity.append(float(np.mean(matrix[:,j])))
+        gaps.append(float(100*np.mean(~valid)))
+    order=np.argsort(matrix.mean(axis=1))[::-1]
+    keep=order[np.linspace(0,len(order)-1,min(max_tracks,len(order)),dtype=int)]
+    label_names=labels["Sequence label"].tolist()
+    names=[label_names[i] if i<len(label_names) else f"Sequence {i+1}" for i in keep]
+    return {"matrix":np.round(matrix[keep],2).tolist(),"names":names,
+            "x":[int((a+b)/2)+1 for a,b in zip(edges[:-1],edges[1:])],
+            "diversity":np.round(diversity,2).tolist(),"gaps":np.round(gaps,2).tolist(),
+            "length":length,"sequences":len(runs)}
+
+
 app=Dash(__name__,external_stylesheets=[dbc.themes.FLATLY],title="RDP-tkp Visualizer")
 server=app.server
 app.layout=dbc.Container([
@@ -165,9 +194,10 @@ def ingest(contents,filename):
             data={"kind":"alignment","filename":filename,"qc":qc.to_dict("records"),"profile":profile.to_dict("records"),"n":len(names),"length":len(seqs[0])}
             msg=f"Loaded {len(names):,} aligned sequences × {len(seqs[0]):,} sites."
         elif lower.endswith(".rdp5"):
-            labels=inspect_rdp5(raw)
-            data={"kind":"project","filename":filename,"labels":labels.to_dict("records"),"bytes":len(raw)}
-            msg=f"Validated an RDP5 project ({len(raw)/1e6:.1f} MB); extracted {len(labels):,} sequence labels."
+            labels=inspect_rdp5(raw); overview=rdp5_alignment_overview(raw,labels)
+            data={"kind":"project","filename":filename,"labels":labels.to_dict("records"),"overview":overview,"bytes":len(raw)}
+            msg=(f"Loaded RDP5 project: {overview['sequences']:,} aligned sequences × "
+                 f"{overview['length']:,} sites; extracted {len(labels):,} project labels.")
         else:
             events=normalize_events(raw); data={"kind":"events","filename":filename,"events":events.to_dict("records")}
             msg=f"Loaded {len(events):,} candidate event rows."
@@ -194,24 +224,20 @@ def render(data):
         summary=dbc.Alert(f'{len(frame):,} events across {frame["Method"].nunique():,} methods and {frame["Recombinant"].nunique():,} recombinant labels',color="info")
     else:
         frame=pd.DataFrame(data["labels"])
-        subtype=(frame[frame["Subtype"]!="Unknown"].groupby("Subtype").size().nlargest(20).sort_values().reset_index(name="Sequences"))
-        primary=px.bar(subtype,x="Sequences",y="Subtype",orientation="h",title="Most represented subtype labels",
-                       color="Sequences",color_continuous_scale="Tealgrn")
-        dated=frame[(frame["Country code"]!="Unknown") & (frame["Year"]!="Unknown")].copy()
-        dated["Year"]=pd.to_numeric(dated["Year"],errors="coerce")
-        dated=dated.dropna(subset=["Year"])
-        if dated.empty:
-            secondary=px.scatter(title="Country/year metadata were not detectable in sequence labels")
-        else:
-            top=dated["Country code"].value_counts().head(18).index
-            heat=(dated[dated["Country code"].isin(top)].groupby(["Country code","Year"]).size().reset_index(name="Sequences"))
-            secondary=px.density_heatmap(heat,x="Year",y="Country code",z="Sequences",histfunc="sum",
-                                         title="Sequence-label coverage by country and year",color_continuous_scale="Viridis")
+        overview=data.get("overview",{}); x=overview.get("x",[])
+        primary=go.Figure(go.Heatmap(z=overview.get("matrix",[]),x=x,y=overview.get("names",[]),
+            colorscale=[[0,"#f7fbff"],[.15,"#c6dbef"],[.35,"#6baed6"],[.65,"#fdae61"],[1,"#b2182b"]],
+            zmin=0,zmax=35,colorbar=dict(title="Divergence<br>from consensus (%)"),hovertemplate="%{y}<br>Site %{x:,}<br>Divergence %{z:.1f}%<extra></extra>"))
+        primary.update_layout(title="RDP-style alignment overview",xaxis_title="Alignment position (nt)",yaxis_title="Representative sequence tracks",height=760)
+        secondary=go.Figure()
+        secondary.add_trace(go.Scatter(x=x,y=overview.get("diversity",[]),name="Mean divergence",line=dict(color="#167d9a",width=3),fill="tozeroy",fillcolor="rgba(22,125,154,.12)"))
+        secondary.add_trace(go.Scatter(x=x,y=overview.get("gaps",[]),name="Uncalled / gap sites",line=dict(color="#d97706",width=2)))
+        secondary.update_layout(title="Genome-wide signal profile",xaxis_title="Alignment position (nt)",yaxis_title="Percent",hovermode="x unified")
         summary=dbc.Row([
-            dbc.Col(dbc.Alert(f'{len(frame):,} labels',color="primary")),
+            dbc.Col(dbc.Alert(f'{overview.get("sequences",0):,} aligned sequences',color="primary")),
+            dbc.Col(dbc.Alert(f'{overview.get("length",0):,} nucleotide sites',color="secondary")),
             dbc.Col(dbc.Alert(f'{frame["Subtype"].replace("Unknown",np.nan).nunique():,} subtypes',color="info")),
-            dbc.Col(dbc.Alert(f'{frame["Country code"].replace("Unknown",np.nan).nunique():,} country codes',color="success")),
-            dbc.Col(dbc.Alert(f'{data["bytes"]/1e6:.1f} MB project',color="secondary"))])
+            dbc.Col(dbc.Alert(f'{frame["Country code"].replace("Unknown",np.nan).nunique():,} country codes',color="success"))])
     for fig in (primary,secondary):
         fig.update_layout(template="plotly_white",margin=dict(l=45,r=25,t=65,b=45),hoverlabel=dict(namelength=-1))
     return primary,secondary,frame.to_dict("records"),[{"name":c,"id":c} for c in frame.columns],summary
