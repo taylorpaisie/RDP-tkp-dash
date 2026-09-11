@@ -29,6 +29,8 @@ The **Similarity scan** tab provides a BootScan-style teaching view. Select a qu
 
 Below the curves, a **candidate recombination mosaic** merges adjacent windows with the same closest parent into colored genome segments and marks parent-switch transitions. Its confidence panel reports the percentage-point identity lead over the next-closest parent; values near zero mean that the parental assignment is effectively tied. These transitions are exploratory candidates, not confirmed RDP breakpoints.
 
+Candidate parents use a consistent colorblind-friendly blue, orange, teal, and magenta palette across the similarity curves, mosaic segments, and legend.
+
 ## VEME lesson files tested
 
 | File | Type | Observed structure |

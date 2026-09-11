@@ -22,6 +22,10 @@ EVENT_ALIASES = {
     "pvalue": ["pvalue", "p-value", "p_value", "probability"],
 }
 
+# Okabe-Ito-inspired colors: distinct on projectors and for common forms of
+# color-vision deficiency. A parent keeps the same color in every panel.
+PARENT_COLORS = ["#0072B2", "#E69F00", "#009E73", "#CC79A7"]
+
 
 def decode_upload(contents: str) -> bytes:
     return base64.b64decode(contents.split(",", 1)[1])
@@ -311,11 +315,12 @@ def render_similarity(data,query_index,parent_indices,window,step):
     if not 0<=int(query_index)<len(seqs):return blank,blank_mosaic
     parents=[int(i) for i in (parent_indices or []) if int(i)!=int(query_index) and 0<=int(i)<len(seqs)][:4]
     fig=go.Figure(); curves=[]; positions=[]
-    for i in parents:
+    for color_index,i in enumerate(parents):
         x,y=sliding_pairwise_identity(seqs[int(query_index)],seqs[i],int(window or 300),int(step or 50))
         positions=x; curves.append(y)
         hover="Site %{x:,}<br>Identity %{y:.2f}%<extra>"+labels[i]+"</extra>"
-        fig.add_trace(go.Scatter(x=x,y=y,mode="lines",name=labels[i],line=dict(width=3),hovertemplate=hover))
+        fig.add_trace(go.Scatter(x=x,y=y,mode="lines",name=labels[i],
+            line=dict(width=3,color=PARENT_COLORS[color_index]),hovertemplate=hover))
     fig.update_layout(template="plotly_white",title=f"Sliding-window similarity to {labels[int(query_index)]}",
         xaxis_title="Alignment position (nt)",yaxis_title="Pairwise identity (%)",hovermode="x unified",
         legend_title="Candidate parent",height=620,margin=dict(l=55,r=25,t=70,b=50))
@@ -334,7 +339,7 @@ def render_similarity(data,query_index,parent_indices,window,step):
     ranked=np.sort(safe,axis=0)
     confidence=ranked[-1]-ranked[-2]
     changes=np.where(winners[1:]!=winners[:-1])[0]+1
-    palette=["#2166ac","#d6604d","#1b9e77","#984ea3"]
+    palette=PARENT_COLORS
     for change in changes:
         fig.add_vline(x=positions[change],line_width=1,line_dash="dot",line_color="#475569",opacity=.65)
     half_step=max(1,int(step or 50)//2); segments=[]; start=0
