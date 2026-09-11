@@ -113,6 +113,12 @@ def inspect_rdp5(raw: bytes) -> pd.DataFrame:
     # by the two-byte marker ``d\0``.  Parsing the fields directly also keeps
     # perfectly valid short lesson labels such as A, B, ... Y.
     fields=re.findall(rb"d\x00([^\x00]{1,100})",header)
+    # The first 32-bit integer after the signature is RDP5's zero-based final
+    # sequence index (24 means 25 sequences).  Later header sections may repeat
+    # or add names for saved analysis objects, so keep only alignment labels.
+    stored_count=int.from_bytes(raw[17:21],"little",signed=False)+1 if len(raw)>=21 else 0
+    if 0 < stored_count <= len(fields):
+        fields=fields[:stored_count]
     seen=[]
     for field in fields:
         value=field.decode("ascii",errors="ignore").strip()
