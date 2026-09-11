@@ -23,7 +23,7 @@ Upload a CSV or TSV containing at least recombinant, start, and end columns. Com
 
 ### RDP5 project files
 
-The app validates the `RDP5 Project File` signature, extracts the fixed-width sequence-label inventory, and derives label metadata for interactive subtype counts and country-by-year coverage. The binary `.rdp5` format is not publicly documented, so the app deliberately does **not** claim event-level parsing from project binaries. Export results to CSV/TSV from RDP for full event visualization.
+The app validates the `RDP5 Project File` signature, extracts the embedded alignment and fixed-width sequence-label inventory, and renders an RDP-style alignment overview plus a genome-wide divergence/gap profile. Label metadata remain available in the sortable table. The binary `.rdp5` event format is not publicly documented, so the app deliberately does **not** claim event-level parsing from project binaries. Export results to CSV/TSV from RDP for full event visualization.
 
 ## VEME lesson files tested
 
