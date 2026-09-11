@@ -104,12 +104,29 @@ def normalize_events(raw: bytes) -> pd.DataFrame:
 def inspect_rdp5(raw: bytes) -> pd.DataFrame:
     if not raw.startswith(b"RDP5 Project File"):
         raise ValueError("The file does not contain the expected RDP5 project signature.")
-    chunks=re.findall(rb"[A-Za-z0-9][A-Za-z0-9_.-]{5,95}",raw)
+    # RDP5 stores the sequence names near the beginning as fixed-width,
+    # NUL-padded ASCII fields.  Stop at the first long nucleotide run so the
+    # embedded alignment is not mistaken for thousands of project labels.
+    alignment_start=re.search(rb"[ACGTN?-]{250,}",raw)
+    header=raw[:alignment_start.start()] if alignment_start else raw[:2_000_000]
+    chunks=re.findall(rb"[A-Za-z0-9][A-Za-z0-9_.-]{5,95}",header)
     seen=[]
     for chunk in chunks:
         value=chunk.decode("ascii",errors="ignore").strip("._-")
         if ("." in value or "_" in value) and value not in seen and not value.isdigit(): seen.append(value)
-    return pd.DataFrame({"Probable sequence/project label":seen[:2000]})
+    rows=[]
+    for label in seen[:5000]:
+        parts=label.split(".")
+        first=parts[0] if parts else ""
+        synthetic=re.match(r"SN\d+_([A-Za-z0-9]+)$",first,re.I)
+        subtype=synthetic.group(1) if synthetic else ("Unknown" if first.upper().startswith("SN") else first)
+        country=parts[1] if len(parts)>2 and 2 <= len(parts[1]) <= 3 else "Unknown"
+        year=parts[2] if len(parts)>3 and re.fullmatch(r"(?:\d{2}|19\d{2}|20\d{2}|x)",parts[2],re.I) else "Unknown"
+        if re.fullmatch(r"\d{2}",year):
+            value=int(year); year=str(1900+value if value>=70 else 2000+value)
+        elif year.lower()=="x": year="Unknown"
+        rows.append({"Sequence label":label,"Subtype":subtype or "Unknown","Country code":country,"Year":year})
+    return pd.DataFrame(rows).drop_duplicates("Sequence label")
 
 
 app=Dash(__name__,external_stylesheets=[dbc.themes.FLATLY],title="RDP-tkp Visualizer")
@@ -125,7 +142,7 @@ app.layout=dbc.Container([
         html.Div(id="status",className="mt-3")
     ]),className="mb-3"),
     dbc.Tabs([
-        dbc.Tab([dcc.Graph(id="primary-chart"),dcc.Graph(id="secondary-chart")],label="Visual overview"),
+        dbc.Tab([dcc.Graph(id="primary-chart",config={"displaylogo":False}),dcc.Graph(id="secondary-chart",config={"displaylogo":False})],label="Visual overview"),
         dbc.Tab([html.Div(id="summary-cards",className="my-3"),dash_table.DataTable(id="table",page_size=15,sort_action="native",filter_action="native",
                  style_table={"overflowX":"auto"},style_cell={"fontFamily":"system-ui","fontSize":13,"padding":"7px"})],label="Data & QC"),
         dbc.Tab(dbc.Card(dbc.CardBody([
@@ -148,8 +165,9 @@ def ingest(contents,filename):
             data={"kind":"alignment","filename":filename,"qc":qc.to_dict("records"),"profile":profile.to_dict("records"),"n":len(names),"length":len(seqs[0])}
             msg=f"Loaded {len(names):,} aligned sequences × {len(seqs[0]):,} sites."
         elif lower.endswith(".rdp5"):
-            labels=inspect_rdp5(raw); data={"kind":"project","filename":filename,"labels":labels.to_dict("records"),"bytes":len(raw)}
-            msg=f"Validated an RDP5 project ({len(raw)/1e6:.1f} MB); extracted {len(labels):,} probable labels."
+            labels=inspect_rdp5(raw)
+            data={"kind":"project","filename":filename,"labels":labels.to_dict("records"),"bytes":len(raw)}
+            msg=f"Validated an RDP5 project ({len(raw)/1e6:.1f} MB); extracted {len(labels):,} sequence labels."
         else:
             events=normalize_events(raw); data={"kind":"events","filename":filename,"events":events.to_dict("records")}
             msg=f"Loaded {len(events):,} candidate event rows."
@@ -175,10 +193,27 @@ def render(data):
         secondary=px.bar(counts,x="Recombinant",y="Events",color="Method",title="Method support by recombinant")
         summary=dbc.Alert(f'{len(frame):,} events across {frame["Method"].nunique():,} methods and {frame["Recombinant"].nunique():,} recombinant labels',color="info")
     else:
-        frame=pd.DataFrame(data["labels"]); primary=px.histogram(frame.assign(Name_length=frame.iloc[:,0].str.len()),x="Name_length",title="Extracted label-length distribution")
-        secondary=px.scatter(title="Event plots require an exported CSV/TSV table")
-        summary=dbc.Alert(f'RDP5 signature valid · {data["bytes"]/1e6:.1f} MB · {len(frame):,} probable labels',color="warning")
-    for fig in (primary,secondary):fig.update_layout(template="plotly_white")
+        frame=pd.DataFrame(data["labels"])
+        subtype=(frame[frame["Subtype"]!="Unknown"].groupby("Subtype").size().nlargest(20).sort_values().reset_index(name="Sequences"))
+        primary=px.bar(subtype,x="Sequences",y="Subtype",orientation="h",title="Most represented subtype labels",
+                       color="Sequences",color_continuous_scale="Tealgrn")
+        dated=frame[(frame["Country code"]!="Unknown") & (frame["Year"]!="Unknown")].copy()
+        dated["Year"]=pd.to_numeric(dated["Year"],errors="coerce")
+        dated=dated.dropna(subset=["Year"])
+        if dated.empty:
+            secondary=px.scatter(title="Country/year metadata were not detectable in sequence labels")
+        else:
+            top=dated["Country code"].value_counts().head(18).index
+            heat=(dated[dated["Country code"].isin(top)].groupby(["Country code","Year"]).size().reset_index(name="Sequences"))
+            secondary=px.density_heatmap(heat,x="Year",y="Country code",z="Sequences",histfunc="sum",
+                                         title="Sequence-label coverage by country and year",color_continuous_scale="Viridis")
+        summary=dbc.Row([
+            dbc.Col(dbc.Alert(f'{len(frame):,} labels',color="primary")),
+            dbc.Col(dbc.Alert(f'{frame["Subtype"].replace("Unknown",np.nan).nunique():,} subtypes',color="info")),
+            dbc.Col(dbc.Alert(f'{frame["Country code"].replace("Unknown",np.nan).nunique():,} country codes',color="success")),
+            dbc.Col(dbc.Alert(f'{data["bytes"]/1e6:.1f} MB project',color="secondary"))])
+    for fig in (primary,secondary):
+        fig.update_layout(template="plotly_white",margin=dict(l=45,r=25,t=65,b=45),hoverlabel=dict(namelength=-1))
     return primary,secondary,frame.to_dict("records"),[{"name":c,"id":c} for c in frame.columns],summary
 
 
