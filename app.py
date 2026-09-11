@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from dash import Dash, Input, Output, State, callback, dash_table, dcc, html, no_update
 
 
@@ -318,9 +319,12 @@ def render_similarity(data,query_index,parent_indices,window,step):
     fig.update_layout(template="plotly_white",title=f"Sliding-window similarity to {labels[int(query_index)]}",
         xaxis_title="Alignment position (nt)",yaxis_title="Pairwise identity (%)",hovermode="x unified",
         legend_title="Candidate parent",height=620,margin=dict(l=55,r=25,t=70,b=50))
-    fig.update_yaxes(range=[0,100])
+    scores=np.asarray(curves,dtype=float)
+    finite=scores[np.isfinite(scores)] if curves else np.array([])
+    lower=max(0,float(np.floor(np.nanpercentile(finite,2)-2))) if finite.size else 0
+    fig.update_yaxes(range=[lower,100])
     if len(curves)<2:return fig,blank_mosaic
-    scores=np.asarray(curves,dtype=float); safe=np.where(np.isnan(scores),-np.inf,scores)
+    safe=np.where(np.isnan(scores),-np.inf,scores)
     raw_winners=np.argmax(safe,axis=0)
     # Suppress one-window flicker caused by nearly tied, overlapping windows.
     winners=raw_winners.copy()
@@ -333,23 +337,35 @@ def render_similarity(data,query_index,parent_indices,window,step):
     palette=["#2166ac","#d6604d","#1b9e77","#984ea3"]
     for change in changes:
         fig.add_vline(x=positions[change],line_width=1,line_dash="dot",line_color="#475569",opacity=.65)
-    winner_names=[labels[parents[i]] for i in winners]
-    colorscale=[]
-    for i,color in enumerate(palette[:len(parents)]):
-        lo=i/max(1,len(parents)-1); hi=(i+0.999)/max(1,len(parents)-1)
-        colorscale.extend([[min(lo,1),color],[min(hi,1),color]])
-    custom=np.stack([np.asarray(winner_names,dtype=object),np.round(confidence,2)],axis=-1)[None,:,:]
-    mosaic=go.Figure(go.Heatmap(z=winners[None,:],x=positions,y=["Closest parent"],customdata=custom,
-        zmin=0,zmax=max(1,len(parents)-1),colorscale=colorscale,showscale=False,
-        hovertemplate="Site %{x:,}<br>%{customdata[0]}<br>Lead over next parent: %{customdata[1]:.2f} pp<extra></extra>"))
-    for i,parent in enumerate(parents):
-        mosaic.add_trace(go.Scatter(x=[None],y=[None],mode="markers",marker=dict(size=12,symbol="square",color=palette[i]),name=labels[parent]))
+    half_step=max(1,int(step or 50)//2); segments=[]; start=0
+    for end in list(changes)+[len(winners)]:
+        idx=int(winners[start]); left=max(1,positions[start]-half_step); right=min(overview.get("length",positions[end-1]+half_step),positions[end-1]+half_step)
+        segments.append({"parent_index":idx,"left":left,"right":right,
+                         "mean_identity":float(np.nanmean(scores[idx,start:end])),
+                         "mean_confidence":float(np.nanmean(confidence[start:end]))})
+        start=end
+    mosaic=make_subplots(rows=2,cols=1,shared_xaxes=True,row_heights=[.58,.42],vertical_spacing=.13,
+                         subplot_titles=("Closest-parent segments","Confidence in the closest parent"))
+    legend_seen=set()
+    for segment in segments:
+        idx=segment["parent_index"]; parent_name=labels[parents[idx]]; show=idx not in legend_seen; legend_seen.add(idx)
+        custom=[[segment["left"],segment["right"],segment["mean_identity"],segment["mean_confidence"]]]
+        mosaic.add_trace(go.Bar(x=[segment["right"]-segment["left"]+1],y=["Query mosaic"],base=[segment["left"]],
+            orientation="h",width=.55,name=parent_name,legendgroup=str(idx),showlegend=show,marker_color=palette[idx],customdata=custom,
+            hovertemplate="Sites %{customdata[0]:,}–%{customdata[1]:,}<br>Closest parent: "+parent_name+
+                          "<br>Mean identity: %{customdata[2]:.2f}%<br>Mean lead: %{customdata[3]:.2f} pp<extra></extra>"),row=1,col=1)
+    mosaic.add_trace(go.Scatter(x=positions,y=confidence,mode="lines",name="Identity lead",showlegend=False,
+        line=dict(color="#334155",width=2),fill="tozeroy",fillcolor="rgba(51,65,85,.14)",
+        hovertemplate="Site %{x:,}<br>Best-parent lead: %{y:.2f} percentage points<extra></extra>"),row=2,col=1)
     for change in changes:
         mosaic.add_vline(x=positions[change],line_width=2,line_color="#172033")
-    mosaic.update_layout(template="plotly_white",title="Candidate recombination mosaic",
-        xaxis_title="Alignment position (nt)",height=260,margin=dict(l=75,r=25,t=65,b=45),
-        legend=dict(orientation="h",y=1.22,x=1,xanchor="right"),hovermode="x")
-    mosaic.update_yaxes(fixedrange=True)
+    mosaic.add_hline(y=1,row=2,col=1,line_dash="dot",line_color="#d97706",annotation_text="1 pp lead")
+    mosaic.update_layout(template="plotly_white",title="Candidate recombination mosaic · parent switches are exploratory",
+        height=470,margin=dict(l=80,r=25,t=90,b=55),barmode="overlay",
+        legend=dict(orientation="h",y=1.16,x=1,xanchor="right"),hovermode="x unified")
+    mosaic.update_xaxes(title_text="Alignment position (nt)",row=2,col=1)
+    mosaic.update_yaxes(fixedrange=True,row=1,col=1)
+    mosaic.update_yaxes(title_text="Lead (pp)",rangemode="tozero",row=2,col=1)
     return fig,mosaic
 
 
