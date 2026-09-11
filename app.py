@@ -233,6 +233,12 @@ app.layout=dbc.Container([
             dcc.Graph(id="mosaic-chart",config={"displaylogo":False}),
             dbc.Alert("Similarity switches can identify regions worth investigating, but this plot is not itself a recombination test.",color="warning")
         ],label="Similarity scan"),
+        dbc.Tab([
+            dbc.Alert("Uses the query and candidate parents selected in the Similarity scan tab.",color="info",className="mt-3"),
+            dcc.Graph(id="contribution-chart",config={"displaylogo":False}),
+            dash_table.DataTable(id="contribution-table",style_table={"overflowX":"auto"},
+                style_cell={"fontFamily":"system-ui","fontSize":13,"padding":"8px"})
+        ],label="Contribution graph"),
         dbc.Tab([html.Div(id="summary-cards",className="my-3"),dash_table.DataTable(id="table",page_size=15,sort_action="native",filter_action="native",
                  style_table={"overflowX":"auto"},style_cell={"fontFamily":"system-ui","fontSize":13,"padding":"7px"})],label="Data & QC"),
         dbc.Tab(dbc.Card(dbc.CardBody([
@@ -384,6 +390,50 @@ def render_similarity(data,query_index,parent_indices,window,step):
     mosaic.update_yaxes(fixedrange=True,row=1,col=1)
     mosaic.update_yaxes(title_text="Lead (pp)",rangemode="tozero",row=2,col=1)
     return fig,mosaic
+
+
+@callback(Output("contribution-chart","figure"),Output("contribution-table","data"),
+          Output("contribution-table","columns"),Input("parsed","data"),Input("query-sequence","value"),
+          Input("parent-sequences","value"),Input("similarity-window","value"),Input("similarity-step","value"))
+def render_contribution_graph(data,query_index,parent_indices,window,step):
+    blank=empty_figure("Select a query and at least two candidate parents in Similarity scan")
+    if not data or data.get("kind")!="project" or query_index is None:return blank,[],[]
+    overview=data.get("overview",{}); seqs=overview.get("sequences_raw",[])
+    labels=[row.get("Sequence label",f"Sequence {i+1}") for i,row in enumerate(data.get("labels",[]))]
+    labels=(labels+[f"Sequence {i+1}" for i in range(len(labels),len(seqs))])[:len(seqs)]
+    query_index=int(query_index)
+    parents=[int(i) for i in (parent_indices or []) if int(i)!=query_index and 0<=int(i)<len(seqs)][:4]
+    if not 0<=query_index<len(seqs) or len(parents)<2:return blank,[],[]
+    curves=[]
+    for parent in parents:
+        _,identity=sliding_pairwise_identity(seqs[query_index],seqs[parent],int(window or 300),int(step or 50))
+        curves.append(identity)
+    scores=np.asarray(curves,dtype=float); safe=np.where(np.isnan(scores),-np.inf,scores)
+    raw=np.argmax(safe,axis=0); winners=raw.copy()
+    for j in range(len(winners)):
+        local=raw[max(0,j-2):min(len(winners),j+3)]; winners[j]=Counter(local).most_common(1)[0][0]
+    ranked=np.sort(safe,axis=0); confidence=ranked[-1]-ranked[-2]
+    records=[]
+    for i,parent in enumerate(parents):
+        assigned=winners==i; count=int(assigned.sum())
+        if not count:continue
+        records.append({"Parent":labels[parent],"Assigned windows":count,
+            "Genome %":round(100*count/len(winners),1),"Mean identity %":round(float(np.nanmean(scores[i,assigned])),2),
+            "Mean lead (pp)":round(float(np.nanmean(confidence[assigned])),2),"color":PARENT_COLORS[i]})
+    query_name=labels[query_index]; node_names=[r["Parent"] for r in records]+[query_name]
+    node_colors=[r["color"] for r in records]+["#172033"]; target=len(records)
+    link_colors=[f"rgba({int(r['color'][1:3],16)},{int(r['color'][3:5],16)},{int(r['color'][5:7],16)},0.60)" for r in records]
+    custom=[[r["Genome %"],r["Mean identity %"],r["Mean lead (pp)"]] for r in records]
+    fig=go.Figure(go.Sankey(arrangement="snap",
+        node=dict(label=node_names,color=node_colors,pad=24,thickness=24,line=dict(color="white",width=1)),
+        link=dict(source=list(range(len(records))),target=[target]*len(records),value=[r["Assigned windows"] for r in records],
+                  color=link_colors,customdata=custom,
+                  hovertemplate="%{source.label} → %{target.label}<br>Genome: %{customdata[0]:.1f}%<br>Mean identity: %{customdata[1]:.2f}%<br>Mean lead: %{customdata[2]:.2f} pp<extra></extra>")))
+    fig.update_layout(template="plotly_white",title=f"Candidate parental contributions to {query_name}",height=580,
+        font=dict(size=13),margin=dict(l=30,r=30,t=75,b=30))
+    display=[{k:v for k,v in r.items() if k!="color"} for r in records]
+    columns=[{"name":c,"id":c} for c in (display[0].keys() if display else [])]
+    return fig,display,columns
 
 
 if __name__=="__main__":app.run(debug=True,host="0.0.0.0",port=8050)
