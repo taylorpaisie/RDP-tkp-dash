@@ -204,6 +204,28 @@ def sliding_pairwise_identity(query: str, parent: str, window: int = 300, step: 
     return centers,identity
 
 
+def rank_parent_candidates(query_index: int, sequences: list[str], labels: list[str], window: int = 300) -> pd.DataFrame:
+    """Rank plausible parents using complementary global and local identity."""
+    query=sequences[query_index]; rows=[]
+    for i,parent in enumerate(sequences):
+        if i==query_index:continue
+        length=min(len(query),len(parent)); q=np.asarray(list(query[:length])); p=np.asarray(list(parent[:length]))
+        valid=np.isin(q,list("ACGT")) & np.isin(p,list("ACGT"))
+        global_identity=100*float(np.mean(q[valid]==p[valid])) if valid.any() else np.nan
+        _,local=sliding_pairwise_identity(query,parent,window,max(50,window//3))
+        finite=np.asarray(local,dtype=float); finite=finite[np.isfinite(finite)]
+        local_peak=float(np.nanmax(finite)) if finite.size else np.nan
+        score=.40*global_identity+.60*local_peak if np.isfinite(global_identity) and np.isfinite(local_peak) else -np.inf
+        rows.append({"index":i,"Sequence":labels[i],"Candidate score":score,
+                     "Whole-genome identity %":global_identity,"Best-window identity %":local_peak,
+                     "Comparable sites %":100*float(valid.mean())})
+    frame=pd.DataFrame(rows).sort_values(["Candidate score","Whole-genome identity %"],ascending=False).reset_index(drop=True)
+    frame.insert(0,"Rank",np.arange(1,len(frame)+1))
+    for column in ["Candidate score","Whole-genome identity %","Best-window identity %","Comparable sites %"]:
+        frame[column]=frame[column].round(2)
+    return frame
+
+
 app=Dash(__name__,external_stylesheets=[dbc.themes.FLATLY],title="RDP Visualizer")
 server=app.server
 app.layout=dbc.Container([
@@ -227,7 +249,11 @@ app.layout=dbc.Container([
                 dbc.Row([
                     dbc.Col([dbc.Label("Window (nt)"),dcc.Slider(id="similarity-window",min=100,max=800,step=50,value=300,marks={100:"100",300:"300",500:"500",800:"800"})],md=8),
                     dbc.Col([dbc.Label("Step (nt)"),dcc.Dropdown(id="similarity-step",options=[25,50,100,200],value=50,clearable=False)],md=4)
-                ],className="g-3 mt-1")
+                ],className="g-3 mt-1"),
+                html.Hr(),html.H5("Suggested candidate parents"),
+                html.P("Ranked from whole-genome identity and strongest local-window identity. The top four populate the parent selector automatically.",className="small text-secondary"),
+                dash_table.DataTable(id="parent-ranking",page_size=8,sort_action="native",
+                    style_table={"overflowX":"auto"},style_cell={"fontFamily":"system-ui","fontSize":12,"padding":"7px"})
             ]),className="my-3"),
             dcc.Graph(id="similarity-chart",config={"displaylogo":False}),
             dcc.Graph(id="mosaic-chart",config={"displaylogo":False}),
@@ -311,14 +337,30 @@ def render(data):
 
 
 @callback(Output("query-sequence","options"),Output("query-sequence","value"),
-          Output("parent-sequences","options"),Output("parent-sequences","value"),Input("parsed","data"))
+          Output("parent-sequences","options"),Input("parsed","data"))
 def similarity_controls(data):
-    if not data or data.get("kind")!="project": return [],None,[],[]
+    if not data or data.get("kind")!="project": return [],None,[]
     overview=data.get("overview",{}); seqs=overview.get("sequences_raw",[])
     labels=[row.get("Sequence label",f"Sequence {i+1}") for i,row in enumerate(data.get("labels",[]))]
     labels=(labels+[f"Sequence {i+1}" for i in range(len(labels),len(seqs))])[:len(seqs)]
     options=[{"label":name,"value":i} for i,name in enumerate(labels)]
-    return options,(0 if options else None),options,list(range(1,min(4,len(options))))
+    return options,(0 if options else None),options
+
+
+@callback(Output("parent-sequences","value"),Output("parent-ranking","data"),Output("parent-ranking","columns"),
+          Input("parsed","data"),Input("query-sequence","value"))
+def update_parent_ranking(data,query_index):
+    if not data or data.get("kind")!="project" or query_index is None:return [],[],[]
+    overview=data.get("overview",{}); seqs=overview.get("sequences_raw",[])
+    labels=[row.get("Sequence label",f"Sequence {i+1}") for i,row in enumerate(data.get("labels",[]))]
+    labels=(labels+[f"Sequence {i+1}" for i in range(len(labels),len(seqs))])[:len(seqs)]
+    query_index=int(query_index)
+    if not 0<=query_index<len(seqs):return [],[],[]
+    ranking=rank_parent_candidates(query_index,seqs,labels)
+    selected=ranking.head(4)["index"].astype(int).tolist()
+    display=ranking.drop(columns="index").to_dict("records")
+    columns=[{"name":c,"id":c} for c in ranking.columns if c!="index"]
+    return selected,display,columns
 
 
 @callback(Output("similarity-chart","figure"),Output("mosaic-chart","figure"),Input("parsed","data"),Input("query-sequence","value"),
