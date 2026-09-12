@@ -33,6 +33,8 @@ The **Similarity scan** tab provides a BootScan-style teaching view:
 
 The plot shows pairwise nucleotide identity between the query and each selected parent. Sites are included only when both sequences contain A, C, G, or T. The identity axis automatically zooms to the informative range.
 
+When the query changes, the app ranks every other sequence using a composite of whole-genome identity (40%) and strongest 300-nt local-window identity (60%). The top four candidates automatically populate the parent selector, while the sortable table retains the complete ranking and comparable-site coverage. This is a screening aid: the highest-scoring sequences are plausible comparison candidates, not proven biological parents.
+
 Candidate parents keep the same color in every panel using a colorblind-friendly palette:
 
 | Parent | Color |
