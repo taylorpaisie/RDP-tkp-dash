@@ -226,20 +226,20 @@ def rank_parent_candidates(query_index: int, sequences: list[str], labels: list[
     return frame
 
 
-app=Dash(__name__,external_stylesheets=[dbc.themes.FLATLY],title="RDP Web Visualizer")
+app=Dash(__name__,external_stylesheets=[dbc.themes.FLATLY],title="RDP Visualizer")
 server=app.server
 app.layout=dbc.Container([
     dcc.Store(id="parsed"),
-    html.H1("RDP Web Visualizer",className="display-5 fw-bold mt-5"),
-    html.P("Turn RDP alignments, project files, and event tables into clear, interactive views for recombination exploration.",className="lead text-secondary mb-4"),
-    dbc.Alert(["Visualization workspace · For detection and formal event review, use ",html.A("nextRDP Web",href="https://murrellgroup.github.io/nextRDPweb/",target="_blank"),"."],color="info",className="mb-4"),
+    html.H1("RDP-tkp Visualizer",className="display-5 fw-bold mt-4"),
+    html.P("Explore alignments and exported RDP event tables without rerunning an analysis. Darren is dumb.",className="lead text-secondary"),
+    dbc.Alert(["For detection and event review, use ",html.A("nextRDP Web",href="https://murrellgroup.github.io/nextRDPweb/",target="_blank"),"."],color="info"),
     dbc.Card(dbc.CardBody([
-        dcc.Upload(id="upload",children=html.Div(["Drop a FASTA alignment, CSV/TSV event table, or RDP5 project — or ",html.A("browse files")]),
+        dcc.Upload(id="upload",children=html.Div(["Drop FASTA, CSV/TSV, or RDP5 project file here — or ",html.A("browse")]),
                    className="border rounded p-5 text-center"),
         html.Div(id="status",className="mt-3")
     ]),className="mb-3"),
     dbc.Tabs([
-        dbc.Tab([dcc.Graph(id="primary-chart",config={"displaylogo":False}),dcc.Graph(id="secondary-chart",config={"displaylogo":False})],label="Overview"),
+        dbc.Tab([dcc.Graph(id="primary-chart",config={"displaylogo":False}),dcc.Graph(id="secondary-chart",config={"displaylogo":False})],label="Visual overview"),
         dbc.Tab([
             dbc.Card(dbc.CardBody([
                 dbc.Row([
@@ -264,16 +264,16 @@ app.layout=dbc.Container([
             dcc.Graph(id="contribution-chart",config={"displaylogo":False}),
             dash_table.DataTable(id="contribution-table",style_table={"overflowX":"auto"},
                 style_cell={"fontFamily":"system-ui","fontSize":13,"padding":"8px"})
-        ],label="Parent contributions"),
+        ],label="Contribution graph"),
         dbc.Tab([html.Div(id="summary-cards",className="my-3"),dash_table.DataTable(id="table",page_size=15,sort_action="native",filter_action="native",
                  style_table={"overflowX":"auto"},style_cell={"fontFamily":"system-ui","fontSize":13,"padding":"7px"})],label="Data & QC"),
         dbc.Tab(dbc.Card(dbc.CardBody([
             html.H4("Supported inputs"),
             dcc.Markdown("""- **FASTA alignments:** sequence-level gap/ambiguity QC and sliding-window variability.\n- **CSV/TSV event tables:** breakpoint intervals, method support, p-values, and sortable records.\n- **RDP5 projects:** file validation and label inventory. The binary project format is not publicly documented, so event-level parsing is intentionally not claimed yet."""),
             html.H4("Privacy",className="mt-3"),html.P("Files are processed in this Dash session and are not sent to WebRDP by this app.")
-        ]),className="my-3"),label="Formats & privacy")
+        ]),className="my-3"),label="About formats")
     ]),
-    html.P("Exploratory visualization for teaching and research. Confirm biological conclusions against primary evidence and formal recombination analyses.",className="small text-secondary text-center my-5")
+    html.P("Teaching and exploratory visualization only; inspect primary evidence before making biological conclusions.",className="small text-secondary text-center my-4")
 ],fluid="xl")
 
 
@@ -332,7 +332,7 @@ def render(data):
             dbc.Col(dbc.Alert(f'{frame["Subtype"].replace("Unknown",np.nan).nunique():,} subtypes',color="info")),
             dbc.Col(dbc.Alert(f'{frame["Country code"].replace("Unknown",np.nan).nunique():,} country codes',color="success"))])
     for fig in (primary,secondary):
-        fig.update_layout(template="plotly_white",paper_bgcolor="#ffffff",plot_bgcolor="#ffffff",font=dict(family="Inter, system-ui, sans-serif",color="#334155"),colorway=PARENT_COLORS,margin=dict(l=45,r=25,t=65,b=45),hoverlabel=dict(namelength=-1,bgcolor="#172033",font_color="#ffffff"))
+        fig.update_layout(template="plotly_white",margin=dict(l=45,r=25,t=65,b=45),hoverlabel=dict(namelength=-1))
     return primary,secondary,frame.to_dict("records"),[{"name":c,"id":c} for c in frame.columns],summary
 
 
